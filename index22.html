@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OCR &amp; Download</title>
+
+  <!-- Tesseract.js via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 0.5rem;
+    }
+    #progress {
+      margin: 1rem 0;
+    }
+    #downloadLink {
+      display: none;
+      margin-top: 1rem;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>OCR &amp; Download</h1>
+  <p>Select an image (PNG, JPG, GIF) or a single-page PDF to run OCR in your browser. Once it’s done, you’ll get a .txt file of the extracted text.</p>
+
+  <!-- File input -->
+  <input type="file" id="fileInput" accept="image/*,.pdf" />
+
+  <!-- Progress indicator -->
+  <div id="progress" class="hidden">
+    <p>Recognizing text… <span id="progressPct">0%</span></p>
+    <progress id="progressBar" value="0" max="1" style="width: 100%;"></progress>
+  </div>
+
+  <!-- Download link (will be shown after OCR completes) -->
+  <a id="downloadLink" download="ocr-output.txt">Download OCR result</a>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const progressContainer = document.getElementById('progress');
+    const progressBar = document.getElementById('progressBar');
+    const progressPct = document.getElementById('progressPct');
+    const downloadLink = document.getElementById('downloadLink');
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Reset UI
+      downloadLink.style.display = 'none';
+      progressContainer.classList.remove('hidden');
+      progressBar.value = 0;
+      progressPct.textContent = '0%';
+
+      // Run Tesseract.js on the selected file
+      try {
+        const { TesseractWorker } = Tesseract;
+        const worker = new TesseractWorker();
+
+        const result = await worker.recognize(file, 'eng', {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              progressBar.value = m.progress;
+              progressPct.textContent = `${Math.round(m.progress * 100)}%`;
+            }
+          }
+        });
+
+        const extractedText = result.text;
+        worker.terminate(); // Clean up the worker
+
+        // Create a Blob from the extracted text
+        const blob = new Blob([extractedText], { type: 'text/plain' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        // Set up the download link and trigger click
+        downloadLink.href = blobUrl;
+        downloadLink.style.display = 'inline-block';
+        downloadLink.textContent = 'Download OCR result';
+        downloadLink.click();
+
+      } catch (err) {
+        console.error('OCR failed:', err);
+        alert('An error occurred during OCR. Please try a different file.');
+      } finally {
+        progressContainer.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
