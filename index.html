@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>OCR &amp; Download</title>
 
-  <!-- Tesseract.js via CDN -->
+  <!-- Tesseract.js v2+ via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
 
   <style>
@@ -35,8 +35,12 @@
   <h1>OCR &amp; Download</h1>
   <p>Select an image (PNG, JPG, GIF) or a single-page PDF to run OCR in your browser. Once it’s done, you’ll get a .txt file of the extracted text.</p>
 
-  <!-- File input -->
-  <input type="file" id="fileInput" accept="image/*,.pdf" />
+  <!-- File input (only PDF by default) -->
+  <input
+    type="file"
+    id="fileInput"
+    accept="image/*,.pdf"
+  />
 
   <!-- Progress indicator -->
   <div id="progress" class="hidden">
@@ -44,7 +48,7 @@
     <progress id="progressBar" value="0" max="1" style="width: 100%;"></progress>
   </div>
 
-  <!-- Download link (will be shown after OCR completes) -->
+  <!-- Download link (shown after OCR is done) -->
   <a id="downloadLink" download="ocr-output.txt">Download OCR result</a>
 
   <script>
@@ -54,48 +58,76 @@
     const progressPct = document.getElementById('progressPct');
     const downloadLink = document.getElementById('downloadLink');
 
+    // We’ll create a single worker instance and reuse it
+    let worker;
+
+    async function initWorker() {
+      worker = Tesseract.createWorker({
+        logger: (m) => {
+          // Only show percentage once 'recognizing text' actually starts
+          if (m.status === 'recognizing text') {
+            progressBar.value = m.progress;
+            progressPct.textContent = `${Math.round(m.progress * 100)}%`;
+          }
+        }
+      });
+      await worker.load();
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
+    }
+
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      // Reset UI
-      downloadLink.style.display = 'none';
+      // If this is the first time, initialize Tesseract worker
+      if (!worker) {
+        progressContainer.classList.remove('hidden');
+        progressBar.value = 0;
+        progressPct.textContent = '0%';
+        try {
+          await initWorker();
+        } catch (err) {
+          console.error('Failed to load Tesseract worker:', err);
+          alert('Could not initialize OCR engine. Please try again later.');
+          progressContainer.classList.add('hidden');
+          return;
+        }
+      }
+
+      // Show progress UI
       progressContainer.classList.remove('hidden');
       progressBar.value = 0;
       progressPct.textContent = '0%';
+      downloadLink.style.display = 'none';
 
-      // Run Tesseract.js on the selected file
       try {
-        const { TesseractWorker } = Tesseract;
-        const worker = new TesseractWorker();
+        // Run OCR. Tesseract.js will update progress via the logger we passed earlier.
+        const {
+          data: { text: extractedText }
+        } = await worker.recognize(file);
 
-        const result = await worker.recognize(file, 'eng', {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              progressBar.value = m.progress;
-              progressPct.textContent = `${Math.round(m.progress * 100)}%`;
-            }
-          }
-        });
-
-        const extractedText = result.text;
-        worker.terminate(); // Clean up the worker
-
-        // Create a Blob from the extracted text
+        // Build a downloadable .txt file from the OCR’d text
         const blob = new Blob([extractedText], { type: 'text/plain' });
         const blobUrl = URL.createObjectURL(blob);
 
-        // Set up the download link and trigger click
         downloadLink.href = blobUrl;
         downloadLink.style.display = 'inline-block';
         downloadLink.textContent = 'Download OCR result';
         downloadLink.click();
-
       } catch (err) {
-        console.error('OCR failed:', err);
-        alert('An error occurred during OCR. Please try a different file.');
+        console.error('Error during OCR:', err);
+        alert('An error occurred while running OCR. See console for details.');
       } finally {
+        // Hide the progress bar once OCR is finished (success or failure)
         progressContainer.classList.add('hidden');
+      }
+    });
+
+    // Optional: terminate worker if the user navigates away
+    window.addEventListener('beforeunload', async () => {
+      if (worker) {
+        await worker.terminate();
       }
     });
   </script>
