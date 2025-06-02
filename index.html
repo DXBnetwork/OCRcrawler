@@ -1,105 +1,130 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PDF Splitter by Size</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Convert PDF to Searchable (OCR)</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 0 20px; }
-    h1 { text-align: center; }
-    input, button { display: block; width: 100%; margin: 10px 0; padding: 10px; font-size: 1rem; }
-    #status { margin-top: 10px; font-size: 0.9rem; color: #555; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 1rem;
+      line-height: 1.6;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    input[type="file"] {
+      font-size: 1rem;
+    }
+    button {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      background-color: #0071e3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 1rem;
+      color: #333;
+    }
+    #download-link {
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>
-  <h1>PDF Splitter by Size</h1>
 
-  <input type="file" id="pdfFile" accept="application/pdf">
-  <label for="maxSize">Max size (MB):</label>
-  <input type="number" id="maxSize" value="10" min="1" step="1">
-  <button id="splitBtn">Split & Download</button>
+  <h1>Convert PDF to Searchable (OCR)</h1>
+  <p>Select a PDF file and click “Run OCR.” We’ll send it to your backend, run ocrmypdf, and return a searchable PDF.</p>
+
+  <form id="ocrForm">
+    <input
+      type="file"
+      id="pdfFile"
+      accept="application/pdf"
+      required
+    />
+    <button type="submit" id="ocrButton">Run OCR</button>
+  </form>
+
   <div id="status"></div>
+  <div id="download-link"></div>
 
   <script>
-    document.getElementById('splitBtn').addEventListener('click', async () => {
+    (function () {
+      const form = document.getElementById('ocrForm');
       const fileInput = document.getElementById('pdfFile');
-      const maxSizeInput = document.getElementById('maxSize');
+      const ocrButton = document.getElementById('ocrButton');
       const statusDiv = document.getElementById('status');
+      const downloadDiv = document.getElementById('download-link');
 
-      if (!fileInput.files.length) {
-        alert('Please select a PDF file.');
-        return;
-      }
-      const file = fileInput.files[0];
-
-      const maxSize = parseInt(maxSizeInput.value);
-      if (!maxSize || maxSize < 1) {
-        alert('Please enter a valid max size (MB).');
-        return;
-      }
-
-      // Build the form data the same way your Python backend expects:
-      //  • field name "pdfFile" → the file itself
-      //  • field name "maxSize" → the integer (in MB)
-      const formData = new FormData();
-      formData.append('pdfFile', file, file.name);
-      formData.append('maxSize', maxSize);
-
-      // Disable button while waiting
-      document.getElementById('splitBtn').disabled = true;
-      statusDiv.textContent = 'Uploading & splitting on server… please wait.';
-
-      try {
-        // === CHANGE THIS URL TO YOUR ACTUAL BACKEND ENDPOINT ===
-        // For example: "https://api.mycompany.com/split" or "https://example.com/process"
-        const backendUrl = 'https://amazing-shortbread-9ebc84.netlify.app';
-
-        const response = await fetch(backendUrl, {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) {
-          // If the server returns a non-200 status, grab the text it sent back
-          const errorText = await response.text();
-          throw new Error(`Server returned ${response.status}: ${errorText}`);
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        statusDiv.textContent = '';
+        downloadDiv.innerHTML = '';
+        if (!fileInput.files.length) {
+          statusDiv.textContent = 'Please select a PDF first.';
+          return;
         }
 
-        // Read content-type so we can guess extension
-        const contentType = response.headers.get('Content-Type') || '';
-        const blob = await response.blob();
+        ocrButton.disabled = true;
+        statusDiv.textContent = 'Uploading & running OCR...';
 
-        // Use either .zip (if server bundled multiple parts) or .pdf
-        const originalBase = file.name.replace(/\.[^.]+$/, '');
-        let ext = '';
-        if (contentType.includes('application/zip')) {
-          ext = '.zip';
-        } else if (contentType.includes('application/pdf')) {
-          ext = '.pdf';
-        } else {
-          // Fallback: assume ZIP if it’s not explicitly PDF
-          ext = '.zip';
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        try {
+          const resp = await fetch('/.netlify/functions/ocr_pdf', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!resp.ok) {
+            throw new Error(`Server returned ${resp.status}: ${resp.statusText}`);
+          }
+
+          // Expecting a single PDF file (searchable) in response:
+          const blob = await resp.blob();
+          const contentDisposition = resp.headers.get('Content-Disposition') || '';
+          let filename = 'searchable.pdf';
+
+          // If the function sets a filename in Content-Disposition, parse it:
+          const match = /filename\*?=(?:UTF-8'')?([^;]+)/i.exec(contentDisposition);
+          if (match && match[1]) {
+            filename = decodeURIComponent(match[1].trim().replace(/['"]/g, ''));
+          }
+
+          // Create a download link for the OCR’d PDF
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.textContent = `Download ${filename}`;
+          downloadDiv.appendChild(a);
+          statusDiv.textContent = 'OCR completed! Click below to download.';
+        } catch (err) {
+          console.error(err);
+          statusDiv.textContent = `Error: ${err.message}`;
+        } finally {
+          ocrButton.disabled = false;
         }
-        const downloadName = `split_${originalBase}${ext}`;
-
-        // Trigger the download of the returned blob
-        const downloadUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = downloadName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(downloadUrl);
-
-        statusDiv.textContent = 'Done! Your split file is downloading.';
-      } catch (err) {
-        console.error(err);
-        statusDiv.textContent = 'Error: ' + err.message;
-      } finally {
-        document.getElementById('splitBtn').disabled = false;
-      }
-    });
+      });
+    })();
   </script>
+
 </body>
 </html>
