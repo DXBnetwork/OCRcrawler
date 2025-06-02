@@ -1,121 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Upload PDF for OCR</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDF Splitter by Size</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: 50px auto;
-      padding: 0 20px;
-    }
-    h1 {
-      text-align: center;
-    }
-    input,
-    button {
-      display: block;
-      width: 100%;
-      margin: 10px 0;
-      padding: 10px;
-      font-size: 1rem;
-    }
-    #status {
-      margin-top: 10px;
-      font-size: 0.9rem;
-      color: #555;
-    }
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 0 20px; }
+    h1 { text-align: center; }
+    input, button { display: block; width: 100%; margin: 10px 0; padding: 10px; font-size: 1rem; }
+    #status { margin-top: 10px; font-size: 0.9rem; color: #555; }
   </style>
 </head>
 <body>
-  <h1>Make PDF Searchable (OCR)</h1>
+  <h1>PDF Splitter by Size</h1>
 
-  <!--
-    Change the `action` URL below to point at your Python‐OCR backend.
-    For example, if your OCR endpoint is located at:
-         https://api.my-ocr-service.com/convert
-    then set action="https://api.my-ocr-service.com/convert".
-  -->
-  <form
-    id="uploadForm"
-    action="https://YOUR_BACKEND_URL_HERE/ocr"
-    method="POST"
-    enctype="multipart/form-data"
-  >
-    <input
-      type="file"
-      name="file"
-      id="pdfFile"
-      accept="application/pdf"
-      required
-    />
-    <button type="submit" id="submitBtn">Upload & Convert</button>
-  </form>
-
+  <input type="file" id="pdfFile" accept="application/pdf">
+  <label for="maxSize">Max size (MB):</label>
+  <input type="number" id="maxSize" value="10" min="1" step="1">
+  <button id="splitBtn">Split & Download</button>
   <div id="status"></div>
 
   <script>
-    (function () {
-      const form = document.getElementById("uploadForm");
-      const fileInput = document.getElementById("pdfFile");
-      const submitBtn = document.getElementById("submitBtn");
-      const statusDiv = document.getElementById("status");
+  document.getElementById('splitBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('pdfFile');
+    const statusDiv = document.getElementById('status');
 
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        statusDiv.textContent = "";
+    if (!fileInput.files.length) {
+      alert('Please select a PDF file.');
+      return;
+    }
+    const file = fileInput.files[0];
+    const maxSize = document.getElementById('maxSize').value;
+    if (!maxSize || parseInt(maxSize) < 1) {
+      alert('Please enter a valid max size (MB).');
+      return;
+    }
 
-        if (!fileInput.files.length) {
-          alert("Please select a PDF file before submitting.");
-          return;
-        }
+    // Prepare form data
+    const formData = new FormData();
+    formData.append('pdfFile', file, file.name);
+    formData.append('maxSize', maxSize);
 
-        const file = fileInput.files[0];
-        const formData = new FormData();
-        formData.append("file", file, file.name);
+    document.getElementById('splitBtn').disabled = true;
+    statusDiv.textContent = 'Uploading and processing on the server… please wait.';
 
-        submitBtn.disabled = true;
-        statusDiv.textContent = "Uploading and processing… please wait.";
-
-        try {
-          // Replace the action URL with whatever backend you have
-          const response = await fetch(form.action, {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Server returned ${response.status}: ${text}`);
-          }
-
-          // We expect the backend to return the OCR’d PDF as a blob
-          const blob = await response.blob();
-
-          // Name the downloaded file “searchable_<original>.pdf”
-          const baseName = file.name.replace(/\.[^.]+$/, ""); // strip extension
-          const outName = `searchable_${baseName}.pdf`;
-
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = outName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-
-          statusDiv.textContent = "Done! Your searchable PDF is downloading.";
-        } catch (err) {
-          console.error(err);
-          statusDiv.textContent = "Error: " + err.message;
-        } finally {
-          submitBtn.disabled = false;
-        }
+    try {
+      // Change '/split' to match your actual backend endpoint URL
+      const response = await fetch('/split', {
+        method: 'POST',
+        body: formData
       });
-    })();
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Server returned ${response.status}: ${text}`);
+      }
+
+      const contentType = response.headers.get('Content-Type') || '';
+      const blob = await response.blob();
+
+      // Determine extension based on MIME type
+      const originalBase = file.name.replace(/\.[^.]+$/, '');
+      let ext = '';
+      if (contentType.includes('application/zip')) {
+        ext = '.zip';
+      } else {
+        ext = '.pdf';
+      }
+      const outName = `split_${originalBase}${ext}`;
+
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = outName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      statusDiv.textContent = 'Done! Your split file is downloading.';
+    } catch (err) {
+      console.error(err);
+      statusDiv.textContent = 'Error: ' + err.message;
+    } finally {
+      document.getElementById('splitBtn').disabled = false;
+    }
+  });
   </script>
 </body>
 </html>
