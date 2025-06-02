@@ -21,72 +21,85 @@
   <div id="status"></div>
 
   <script>
-  document.getElementById('splitBtn').addEventListener('click', async () => {
-    const fileInput = document.getElementById('pdfFile');
-    const statusDiv = document.getElementById('status');
+    document.getElementById('splitBtn').addEventListener('click', async () => {
+      const fileInput = document.getElementById('pdfFile');
+      const maxSizeInput = document.getElementById('maxSize');
+      const statusDiv = document.getElementById('status');
 
-    if (!fileInput.files.length) {
-      alert('Please select a PDF file.');
-      return;
-    }
-    const file = fileInput.files[0];
-    const maxSize = document.getElementById('maxSize').value;
-    if (!maxSize || parseInt(maxSize) < 1) {
-      alert('Please enter a valid max size (MB).');
-      return;
-    }
+      if (!fileInput.files.length) {
+        alert('Please select a PDF file.');
+        return;
+      }
+      const file = fileInput.files[0];
 
-    // Prepare form data
-    const formData = new FormData();
-    formData.append('pdfFile', file, file.name);
-    formData.append('maxSize', maxSize);
-
-    document.getElementById('splitBtn').disabled = true;
-    statusDiv.textContent = 'Uploading and processing on the server… please wait.';
-
-    try {
-      // Change '/split' to match your actual backend endpoint URL
-      const response = await fetch('/split', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(`Server returned ${response.status}: ${text}`);
+      const maxSize = parseInt(maxSizeInput.value);
+      if (!maxSize || maxSize < 1) {
+        alert('Please enter a valid max size (MB).');
+        return;
       }
 
-      const contentType = response.headers.get('Content-Type') || '';
-      const blob = await response.blob();
+      // Build the form data the same way your Python backend expects:
+      //  • field name "pdfFile" → the file itself
+      //  • field name "maxSize" → the integer (in MB)
+      const formData = new FormData();
+      formData.append('pdfFile', file, file.name);
+      formData.append('maxSize', maxSize);
 
-      // Determine extension based on MIME type
-      const originalBase = file.name.replace(/\.[^.]+$/, '');
-      let ext = '';
-      if (contentType.includes('application/zip')) {
-        ext = '.zip';
-      } else {
-        ext = '.pdf';
+      // Disable button while waiting
+      document.getElementById('splitBtn').disabled = true;
+      statusDiv.textContent = 'Uploading & splitting on server… please wait.';
+
+      try {
+        // === CHANGE THIS URL TO YOUR ACTUAL BACKEND ENDPOINT ===
+        // For example: "https://api.mycompany.com/split" or "https://example.com/process"
+        const backendUrl = 'https://amazing-shortbread-9ebc84.netlify.app';
+
+        const response = await fetch(backendUrl, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          // If the server returns a non-200 status, grab the text it sent back
+          const errorText = await response.text();
+          throw new Error(`Server returned ${response.status}: ${errorText}`);
+        }
+
+        // Read content-type so we can guess extension
+        const contentType = response.headers.get('Content-Type') || '';
+        const blob = await response.blob();
+
+        // Use either .zip (if server bundled multiple parts) or .pdf
+        const originalBase = file.name.replace(/\.[^.]+$/, '');
+        let ext = '';
+        if (contentType.includes('application/zip')) {
+          ext = '.zip';
+        } else if (contentType.includes('application/pdf')) {
+          ext = '.pdf';
+        } else {
+          // Fallback: assume ZIP if it’s not explicitly PDF
+          ext = '.zip';
+        }
+        const downloadName = `split_${originalBase}${ext}`;
+
+        // Trigger the download of the returned blob
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = downloadName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+
+        statusDiv.textContent = 'Done! Your split file is downloading.';
+      } catch (err) {
+        console.error(err);
+        statusDiv.textContent = 'Error: ' + err.message;
+      } finally {
+        document.getElementById('splitBtn').disabled = false;
       }
-      const outName = `split_${originalBase}${ext}`;
-
-      // Trigger download
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = outName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      statusDiv.textContent = 'Done! Your split file is downloading.';
-    } catch (err) {
-      console.error(err);
-      statusDiv.textContent = 'Error: ' + err.message;
-    } finally {
-      document.getElementById('splitBtn').disabled = false;
-    }
-  });
+    });
   </script>
 </body>
 </html>
