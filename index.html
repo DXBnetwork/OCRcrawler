@@ -3,15 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OCR &amp; Download</title>
+  <title>OCR &amp; Download as PDF</title>
 
-  <!-- Tesseract.js v2+ via CDN -->
+  <!-- Tesseract.js v2+ (for in-browser OCR) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+
+  <!-- jsPDF (to generate a PDF from the extracted text) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
     body {
       font-family: sans-serif;
-      max-width: 600px;
+      max-width: 640px;
       margin: 2rem auto;
       padding: 0 1rem;
       text-align: center;
@@ -29,107 +32,149 @@
     .hidden {
       display: none;
     }
+    progress {
+      width: 100%;
+    }
   </style>
 </head>
 <body>
-  <h1>OCR &amp; Download</h1>
-  <p>Select an image (PNG, JPG, GIF) or a single-page PDF to run OCR in your browser. Once it’s done, you’ll get a .txt file of the extracted text.</p>
+  <h1>OCR & Download as PDF</h1>
+  <p>
+    Select a PDF (or image: PNG/JPG/GIF) to run OCR in your browser.  
+    Once it’s done, you’ll receive a <strong>PDF</strong> with the extracted text.
+  </p>
 
-  <!-- File input (only PDF by default) -->
+  <!-- File input (only allowing PDFs by default; you can also allow images) -->
   <input
     type="file"
     id="fileInput"
-    accept="image/*,.pdf"
+    accept=".pdf,image/*"
   />
 
-  <!-- Progress indicator -->
+  <!-- Progress indicator (hidden until OCR starts) -->
   <div id="progress" class="hidden">
     <p>Recognizing text… <span id="progressPct">0%</span></p>
-    <progress id="progressBar" value="0" max="1" style="width: 100%;"></progress>
+    <progress id="progressBar" value="0" max="1"></progress>
   </div>
 
-  <!-- Download link (shown after OCR is done) -->
-  <a id="downloadLink" download="ocr-output.txt">Download OCR result</a>
+  <!-- Download link (shown after OCR→PDF generation) -->
+  <a id="downloadLink" download="ocr-output.pdf">Download OCR-PDF</a>
 
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const progressContainer = document.getElementById('progress');
-    const progressBar = document.getElementById('progressBar');
-    const progressPct = document.getElementById('progressPct');
-    const downloadLink = document.getElementById('downloadLink');
+    (async () => {
+      // Grab references
+      const fileInput = document.getElementById('fileInput');
+      const progressContainer = document.getElementById('progress');
+      const progressBar = document.getElementById('progressBar');
+      const progressPct = document.getElementById('progressPct');
+      const downloadLink = document.getElementById('downloadLink');
 
-    // We’ll create a single worker instance and reuse it
-    let worker;
+      // We'll cache a single Tesseract worker instance
+      let worker = null;
 
-    async function initWorker() {
-      worker = Tesseract.createWorker({
-        logger: (m) => {
-          // Only show percentage once 'recognizing text' actually starts
-          if (m.status === 'recognizing text') {
-            progressBar.value = m.progress;
-            progressPct.textContent = `${Math.round(m.progress * 100)}%`;
+      // Initialize (load + set up language) only once
+      async function initWorker() {
+        worker = Tesseract.createWorker({
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              progressBar.value = m.progress;
+              progressPct.textContent = `${Math.round(m.progress * 100)}%`;
+            }
           }
-        }
-      });
-      await worker.load();
-      await worker.loadLanguage('eng');
-      await worker.initialize('eng');
-    }
+        });
+        await worker.load();
+        await worker.loadLanguage('eng');
+        await worker.initialize('eng');
+      }
 
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+      // Listen for file selection
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return; // User canceled
 
-      // If this is the first time, initialize Tesseract worker
-      if (!worker) {
+        // Show progress UI
         progressContainer.classList.remove('hidden');
         progressBar.value = 0;
         progressPct.textContent = '0%';
-        try {
-          await initWorker();
-        } catch (err) {
-          console.error('Failed to load Tesseract worker:', err);
-          alert('Could not initialize OCR engine. Please try again later.');
-          progressContainer.classList.add('hidden');
-          return;
+        downloadLink.style.display = 'none';
+
+        // (1) Ensure worker is initialized
+        if (!worker) {
+          try {
+            await initWorker();
+          } catch (err) {
+            console.error('Failed to initialize Tesseract worker:', err);
+            alert('Could not load OCR engine. Please try again later.');
+            progressContainer.classList.add('hidden');
+            return;
+          }
         }
-      }
 
-      // Show progress UI
-      progressContainer.classList.remove('hidden');
-      progressBar.value = 0;
-      progressPct.textContent = '0%';
-      downloadLink.style.display = 'none';
+        // (2) Run OCR on the chosen file
+        try {
+          const {
+            data: { text: extractedText }
+          } = await worker.recognize(file);
 
-      try {
-        // Run OCR. Tesseract.js will update progress via the logger we passed earlier.
-        const {
-          data: { text: extractedText }
-        } = await worker.recognize(file);
+          // (3) Package the extracted text into a PDF via jsPDF
+          // We import from the jspdf namespace. In jspdf@2.x (UMD build),
+          // it’s exposed under window.jspdf.jsPDF.
+          const { jsPDF } = window.jspdf;
 
-        // Build a downloadable .txt file from the OCR’d text
-        const blob = new Blob([extractedText], { type: 'text/plain' });
-        const blobUrl = URL.createObjectURL(blob);
+          // Create a new PDF (letter-sized portrait by default)
+          const doc = new jsPDF({
+            unit: 'pt',        // points
+            format: 'letter',  // 8.5" × 11"
+          });
 
-        downloadLink.href = blobUrl;
-        downloadLink.style.display = 'inline-block';
-        downloadLink.textContent = 'Download OCR result';
-        downloadLink.click();
-      } catch (err) {
-        console.error('Error during OCR:', err);
-        alert('An error occurred while running OCR. See console for details.');
-      } finally {
-        // Hide the progress bar once OCR is finished (success or failure)
-        progressContainer.classList.add('hidden');
-      }
-    });
+          // Define text options
+          const margin = 40;       // 40pt margin on left/right
+          const maxWidth = doc.internal.pageSize.getWidth() - 2 * margin;
+          const lineHeight = 14;   // 14pt line height (roughly 10–12 pt font)
 
-    // Optional: terminate worker if the user navigates away
-    window.addEventListener('beforeunload', async () => {
-      if (worker) {
-        await worker.terminate();
-      }
-    });
+          // Choose a legible monospaced font (Courier) or default
+          doc.setFont('Courier');
+          doc.setFontSize(12);
+
+          // Split the extracted text into lines that fit within maxWidth
+          const lines = doc.splitTextToSize(extractedText, maxWidth);
+
+          // Render each line onto the PDF, adding pages as necessary
+          let cursorY = margin;
+          for (let i = 0; i < lines.length; i++) {
+            // If we exceed one page, call .addPage() and reset cursorY
+            if (cursorY + lineHeight > doc.internal.pageSize.getHeight() - margin) {
+              doc.addPage();
+              cursorY = margin;
+            }
+            doc.text(lines[i], margin, cursorY);
+            cursorY += lineHeight;
+          }
+
+          // (4) Convert jsPDF to a Blob and prompt download
+          const pdfBlob = doc.output('blob');
+          const blobUrl = URL.createObjectURL(pdfBlob);
+
+          downloadLink.href = blobUrl;
+          downloadLink.style.display = 'inline-block';
+          downloadLink.textContent = 'Download OCR-PDF';
+          downloadLink.click();
+        }
+        catch (err) {
+          console.error('Error during OCR→PDF generation:', err);
+          alert('An error occurred during OCR. Check the console for details.');
+        }
+        finally {
+          // Hide progress bar once OCR (and PDF creation) is done
+          progressContainer.classList.add('hidden');
+        }
+      });
+
+      // (Optional) Clean up Tesseract worker if the user leaves/reloads
+      window.addEventListener('beforeunload', async () => {
+        if (worker) await worker.terminate();
+      });
+    })();
   </script>
 </body>
 </html>
