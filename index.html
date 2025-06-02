@@ -1,199 +1,155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF OCR Processor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .upload-icon {
-            width: 50px;
-            height: 50px;
-            margin-bottom: 1rem;
-            color: #60a5fa; /* Tailwind blue-400 */
-        }
-        .file-name {
-            font-style: italic;
-            color: #6b7280; /* Tailwind gray-500 */
-        }
-        .loader {
-            border: 4px solid #f3f3f3; /* Light grey */
-            border-top: 4px solid #3498db; /* Blue */
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .message-box {
-            padding: 1rem;
-            border-radius: 0.375rem; /* rounded-md */
-            margin-top: 1rem;
-            font-size: 0.875rem; /* text-sm */
-        }
-        .message-box-success {
-            background-color: #d1fae5; /* Tailwind green-100 */
-            color: #065f46; /* Tailwind green-800 */
-            border: 1px solid #6ee7b7; /* Tailwind green-300 */
-        }
-        .message-box-error {
-            background-color: #fee2e2; /* Tailwind red-100 */
-            color: #991b1b; /* Tailwind red-800 */
-            border: 1px solid #fca5a5; /* Tailwind red-300 */
-        }
-        .message-box-info {
-            background-color: #e0f2fe; /* Tailwind lightBlue-100 */
-            color: #075985; /* Tailwind lightBlue-800 */
-            border: 1px solid #7dd3fc; /* Tailwind lightBlue-300 */
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OCR-PDF Frontend</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+    }
+    .upload-section {
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    label {
+      font-weight: bold;
+    }
+    input[type="file"] {
+      padding: 0.5rem;
+    }
+    button {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      border-radius: 4px;
+    }
+    button:disabled {
+      background-color: #aaa;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 1rem;
+      font-style: italic;
+      color: #555;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
-    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
-        <div class="text-center mb-8">
-            <svg class="upload-icon mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3 3m3-3l3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338 0 4.5 4.5 0 01-1.41 8.775H6.75z" />
-            </svg>
-            <h1 class="text-2xl font-bold text-gray-700">Process Your PDF</h1>
-            <p class="text-gray-500">Upload a PDF file to make it searchable.</p>
-        </div>
 
-        <!--
-            IMPORTANT: For this form to work with Netlify Functions,
-            you would typically set the 'action' attribute to the URL of your Netlify Function,
-            e.g., action="/.netlify/functions/process-pdf"
-            and method="POST".
-            The 'enctype' is crucial for file uploads.
-        -->
-        <form id="ocrForm" enctype="multipart/form-data">
-            <div class="mb-6">
-                <label for="pdfFile" class="block mb-2 text-sm font-medium text-gray-900">Choose PDF file</label>
-                <input type="file" id="pdfFile" name="pdfFile" accept=".pdf" required
-                       class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 p-2.5">
-                <p id="fileNameDisplay" class="mt-1 text-sm text-gray-500"></p>
-            </div>
+<body>
+  <h1>OCR-PDF Converter</h1>
 
-            <button type="submit"
-                    class="w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center flex items-center justify-center">
-                <span id="buttonText">Upload and Process</span>
-                <div id="loader" class="loader hidden ml-2"></div>
-            </button>
-        </form>
+  <div class="upload-section">
+    <label for="pdfInput">1. Select a PDF to OCR:</label>
+    <input
+      type="file"
+      id="pdfInput"
+      accept="application/pdf"
+      />
 
-        <div id="messageArea" class="mt-6">
-            </div>
+    <button id="submitBtn" disabled>Upload &amp; Convert</button>
 
-        <div class="mt-6 text-xs text-gray-400 text-center">
-            <p><strong>How this works (conceptual):</strong></p>
-            <ol class="list-decimal list-inside text-left">
-                <li>You select a PDF file and click "Upload and Process".</li>
-                <li>The file is sent to a secure backend function (e.g., running on Netlify).</li>
-                <li>The backend function uses `ocrmypdf` (like your Python script) to make the PDF searchable.</li>
-                <li>Once processed, the searchable PDF is sent back to your browser and a download should start automatically.</li>
-                <li>Your original Python script's logic for `ocrmypdf` would be adapted to run in this backend function.</li>
-            </ol>
-        </div>
-    </div>
+    <div id="status" class="status"></div>
+  </div>
 
-    <script>
-        const ocrForm = document.getElementById('ocrForm');
-        const pdfFile = document.getElementById('pdfFile');
-        const fileNameDisplay = document.getElementById('fileNameDisplay');
-        const messageArea = document.getElementById('messageArea');
-        const loader = document.getElementById('loader');
-        const buttonText = document.getElementById('buttonText');
+  <script>
+    (function() {
+      const pdfInput = document.getElementById('pdfInput');
+      const submitBtn = document.getElementById('submitBtn');
+      const statusDiv = document.getElementById('status');
 
-        pdfFile.addEventListener('change', function() {
-            if (this.files.length > 0) {
-                fileNameDisplay.textContent = `Selected file: ${this.files[0].name}`;
-            } else {
-                fileNameDisplay.textContent = '';
-            }
-        });
+      // --------‐ UPDATE THIS TO YOUR BACKEND ENDPOINT --------‐
+      const BACKEND_URL = 'https://YOUR_BACKEND_URL/ocr';
+      // -------------------------------------------------------
 
-        ocrForm.addEventListener('submit', async function(event) {
-            event.preventDefault(); // Prevent default form submission
+      let selectedFile = null;
 
-            if (!pdfFile.files || pdfFile.files.length === 0) {
-                displayMessage('Please select a PDF file first.', 'error');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('pdfFile', pdfFile.files[0]);
-
-            // Show loader and disable button
-            loader.classList.remove('hidden');
-            buttonText.textContent = 'Processing...';
-            ocrForm.querySelector('button[type="submit"]').disabled = true;
-            messageArea.innerHTML = ''; // Clear previous messages
-
-            try {
-                // THIS IS WHERE YOU WOULD MAKE THE FETCH REQUEST TO YOUR NETLIFY FUNCTION
-                // Example: const response = await fetch('/.netlify/functions/process-pdf', {
-                //     method: 'POST',
-                //     body: formData,
-                // });
-                // For demonstration, we'll simulate a delay and a successful response.
-
-                displayMessage('Uploading and sending to backend for processing...', 'info');
-
-                await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate network delay & processing
-
-                // --- SIMULATED BACKEND INTERACTION ---
-                // In a real scenario, the server would respond.
-                // If successful and the server sends the file for download:
-                // const blob = await response.blob();
-                // const downloadUrl = window.URL.createObjectURL(blob);
-                // const a = document.createElement('a');
-                // a.style.display = 'none';
-                // a.href = downloadUrl;
-                // a.download = 'searchable_' + pdfFile.files[0].name; // Or whatever name the server suggests
-                // document.body.appendChild(a);
-                // a.click();
-                // window.URL.revokeObjectURL(downloadUrl);
-                // document.body.removeChild(a);
-                // displayMessage(`Successfully processed. Download of 'searchable_${pdfFile.files[0].name}' should have started.`, 'success');
-
-                // If there was an error from the server:
-                // if (!response.ok) {
-                //     const errorData = await response.json(); // Or response.text()
-                //     throw new Error(errorData.message || `Server error: ${response.status}`);
-                // }
-
-                // For this example, let's just show a success message, as we can't actually process.
-                displayMessage(`<strong>Simulated Success:</strong> If this were connected to a backend, 'searchable_${pdfFile.files[0].name}' would now be downloading.`, 'success');
-                // --- END OF SIMULATED BACKEND INTERACTION ---
-
-            } catch (error) {
-                console.error('Error during processing:', error);
-                displayMessage(`An error occurred: ${error.message}. Check console for details.`, 'error');
-            } finally {
-                // Hide loader and re-enable button
-                loader.classList.add('hidden');
-                buttonText.textContent = 'Upload and Process';
-                ocrForm.querySelector('button[type="submit"]').disabled = false;
-                pdfFile.value = ''; // Clear the file input
-                fileNameDisplay.textContent = '';
-            }
-        });
-
-        function displayMessage(message, type = 'info') {
-            // Clear previous messages
-            messageArea.innerHTML = '';
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message-box message-box-${type}`;
-            messageDiv.innerHTML = message; // Use innerHTML to allow for bold tags etc.
-            messageArea.appendChild(messageDiv);
+      pdfInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          selectedFile = e.target.files[0];
+          statusDiv.textContent = `Selected: ${selectedFile.name}`;
+          submitBtn.disabled = false;
+        } else {
+          selectedFile = null;
+          statusDiv.textContent = '';
+          submitBtn.disabled = true;
         }
-    </script>
+      });
+
+      submitBtn.addEventListener('click', async () => {
+        if (!selectedFile) {
+          return;
+        }
+
+        submitBtn.disabled = true;
+        statusDiv.textContent = 'Uploading and converting PDF…';
+
+        try {
+          // Build FormData
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+
+          // Send request to backend
+          const response = await fetch(BACKEND_URL, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+          }
+
+          // Expecting a PDF blob in return
+          const blob = await response.blob();
+          const contentDisposition = response.headers.get('Content-Disposition') || '';
+          let filename = '';
+
+          // Try to extract filename from Content-Disposition header, if provided:
+          if (contentDisposition.includes('filename=')) {
+            const match = contentDisposition.match(/filename="?(.+?)"?($|;)/);
+            if (match) {
+              filename = match[1];
+            }
+          }
+          // Fallback to prefixing with “searchable_” if header was not set
+          if (!filename) {
+            const origName = selectedFile.name.replace(/\.pdf$/i, '');
+            filename = `searchable_${origName}.pdf`;
+          }
+
+          // Create a temporary URL and trigger download
+          const blobUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(blobUrl);
+
+          statusDiv.textContent = `Conversion complete! Download should start automatically.`;
+        }
+        catch (err) {
+          console.error(err);
+          statusDiv.textContent = `❌ Error: ${err.message}`;
+        }
+        finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
