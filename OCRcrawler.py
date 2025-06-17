@@ -63,5 +63,5 @@ if __name__ == '__main__':
     # Open the file dialog to select a file
     file_path = filedialog.askopenfilename(title='Select File') # Changed from askdirectory
     input_pdf = file_path
-    input_path=input_pdf
+    input_path=input_pd
     OCRcrawler(input_path)
