@@ -37,7 +37,7 @@ def OCRcrawler(input_path):
             check=True,  
             capture_output=True, 
             text=True, 
-            env=env 
+            env=env
         )
         print(f"Successfully converted '{input_pdf_path}' to searchable PDF: '{output_pdf_path}'")
 
@@ -63,5 +63,5 @@ if __name__ == '__main__':
     # Open the file dialog to select a file
     file_path = filedialog.askopenfilename(title='Select File') # Changed from askdirectory
     input_pdf = file_path
-    input_path=input_pd
+    input_path=input_pdf
     OCRcrawler(input_path)
