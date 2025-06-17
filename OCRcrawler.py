@@ -53,7 +53,6 @@ def OCRcrawler(input_path):
     except FileNotFoundError:
         print("Error: 'ocrmypdf' command not found.")
         print("Please ensure ocrmypdf is installed and in your system's PATH.")
-        print("You can install it using: pip install ocrmypdf")
 
 if __name__ == '__main__':
     root = tk.Tk()
