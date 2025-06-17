@@ -49,7 +49,6 @@ def OCRcrawler(input_path):
         print(f"STDERR: {e.stderr}")
         print("\nPossible reasons for failure:")
         print("  - Input PDF path is incorrect or file doesn't exist.")
-        print("  - ocrmypdf itself might have an internal issue or dependency problem.")
         print("  - Tesseract OCR language data might be missing (e.g., eng.traineddata).")
     except FileNotFoundError:
         print("Error: 'ocrmypdf' command not found.")
